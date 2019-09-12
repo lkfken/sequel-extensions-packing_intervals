@@ -23,7 +23,7 @@ Or install it yourself as:
 ...
 require 'sequel/extensions/packing_intervals'
 ...
-dataset = DB[:a].dataset.select(:user_id, :from_dt___start_date, :to_dt___end_date)  # dataset is expected to have [start_date] and [end_date]
+dataset = DB[:a].dataset.select(:user_id, :from_dt___start_date, :to_dt___end_date).from_self  # dataset is expected to have [start_date] and [end_date]
 dataset = dataset.extension(:packing_intervals)
 dataset.packing_intervals(:partition => [:user_id])
 
