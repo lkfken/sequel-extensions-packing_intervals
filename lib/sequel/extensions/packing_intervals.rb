@@ -12,7 +12,7 @@ module Sequel
 
         db = dataset.db
         reduced = db[:c4].
-            with(:c1, dataset.cross_apply(DST::DB['VALUES (1, START_DATE), (-1, END_DATE)'].as(:a, [:type, :ts])).
+            with(:c1, dataset.cross_apply(DB['VALUES (1, START_DATE), (-1, END_DATE)'].as(:a, [:type, :ts])).
                 select(*partition, :ts, :type).
                 select_append(
                     Sequel.case({-1 => nil}, Sequel.function(:row_number).over(:partition => [partition, :type].flatten, :order => :start_date), :type).as(:s),
