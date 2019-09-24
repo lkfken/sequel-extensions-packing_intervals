@@ -5,7 +5,7 @@ module Sequel
     module PackingIntervals
       def packing_intervals(partition:, dataset: self)
         unless dataset.where(Sequel.lit('START_DATE > END_DATE')).limit(1).all.empty?
-          raise PackingIntervals, "ERROR: dataset contain at least one record with start date after end date"
+          raise PackingIntervals, 'ERROR: dataset contain at least one record with start date after end date'
         end
         unless dataset.where(Sequel.lit('START_DATE = END_DATE')).limit(1).all.empty?
           warn 'WARNING: dataset contain at least one record with start date = end date'
@@ -31,7 +31,7 @@ module Sequel
 
         # merge date intervals if no gap
         db[:c7].
-            with(:c5, reduced.select_append(lag_end_date.as(:lag), Sequel.case({Sequel[:start_date] <= Sequel.expr(lag_end_date + 1) => 0}, 1).as(:grp_start))).
+            with(:c5, reduced.select_append(lag_end_date.as(:lag), Sequel.case({Sequel[:start_date] <= Sequel.function(:dateadd, :day, 1, lag_end_date) => 0}, 1).as(:grp_start))).
             with(:c6, db[:c5].select_append(Sequel.function(:sum, :grp_start).over(partition: partition, order: [:start_date, :end_date]).as(:grp))).
             with(:c7, db[:c6].select_group(*(partition | [:grp])).select_append(
                 Sequel.function(:min, :start_date).as(:start_date),
