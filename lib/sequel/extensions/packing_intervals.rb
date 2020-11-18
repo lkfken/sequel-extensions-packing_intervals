@@ -1,3 +1,5 @@
+# see https://www.red-gate.com/simple-talk/sql/t-sql-programming/calculating-gaps-between-overlapping-time-intervals-in-sql/
+
 require_relative 'packing_intervals/version'
 
 module Sequel
@@ -22,14 +24,24 @@ module Sequel
         lag_end_date    = Sequel.function(:lag, end_date).over(:partition => partition, :order => [start_date, end_date])
 
         reduced = db["#{cte_alias}4".to_sym].
+            # add time stamp (ts) and date type indicator (type, 1 = start date, -1 = end date)
             with("#{cte_alias}1".to_sym, dataset.cross_apply(db["VALUES (1, #{start_date.to_s}), (-1, #{end_date.to_s})"].as(:a, [:type, :ts])).
-                select(*partition, :ts, :type).
-                select_append(
-                    Sequel.case({-1 => nil}, Sequel.function(:row_number).over(:partition => [partition, :type].flatten, :order => :ts), :type).as(:s),
-                    Sequel.case({1 => nil}, Sequel.function(:row_number).over(:partition => [partition, :type].flatten, :order => :ts), :type).as(:e))).
-            with("#{cte_alias}2".to_sym, db["#{cte_alias}1".to_sym].select(*partition, :ts, :type, :s, :e).select_append { row_number.function.over(:partition => partition, :order => [:ts, type.desc]).as(:se) }).
-            with("#{cte_alias}3".to_sym, db["#{cte_alias}2".to_sym].select_append(grpnm(partition: partition).as(:grpnm)).where(Sequel.lit('COALESCE(s - (se - s) - 1, (se - e) - e) = 0'))).
-            with("#{cte_alias}4".to_sym, db["#{cte_alias}3".to_sym].select_group(*grpnm_partition).select_append { min(:ts).as(start_date) }.select_append { max(:ts).as(end_date) })
+                # select(*partition, :ts, :type).
+                # append the start date sequence number and end date sequence number
+                select_append(start_date_order(partition: partition).as(:s), end_date_order(partition: partition).as(:e))).
+            with("#{cte_alias}2".to_sym, db["#{cte_alias}1".to_sym].
+                # select(*partition, :ts, :type, :s, :e).
+                # append the sequence number of partition
+                select_append { row_number.function.over(:partition => partition, :order => [:ts, type.desc]).as(:se) }).
+            with("#{cte_alias}3".to_sym, db["#{cte_alias}2".to_sym].
+                # group rows by pair(2) and filter/choose those rows where (start seq num - (seq num - start seq num) - 1) = 0
+                # or where ((seq num - end seq num) - end seq num) = 0
+                # the COALESCE function is to eliminates overlaps
+                # @grpnm is the group number (or island number)
+                select_append(grpnm(partition: partition).as(:grpnm)).where(Sequel.lit('COALESCE(s - (se - s) - 1, (se - e) - e) = 0'))).
+            with("#{cte_alias}4".to_sym, db["#{cte_alias}3".to_sym].
+                # for each island, get the minimum start date and maximum end date
+                select_group(*grpnm_partition).select_append { min(:ts).as(start_date) }.select_append { max(:ts).as(end_date) })
 
         # merge date intervals if no gap
         db["#{cte_alias}7".to_sym].
@@ -43,8 +55,22 @@ module Sequel
 
       private
 
-      def grpnm(partition:)
-        fn1 = Sequel.function(:row_number).over(:partition => partition, :order => :ts) - 1
+      # @param type date type (1 = start date, -1 = end date)
+      # if type is an end date, then return nil
+      # if type is a start date, then return a row number based on the ts (timestamp) order
+      def start_date_order(partition:, order: :ts, type: :type)
+        Sequel.case({-1 => nil}, Sequel.function(:row_number).over(:partition => [partition, :type].flatten, :order => order), type)
+      end
+
+      # @param type date type (1 = start date, -1 = end date)
+      # if type is a start date, then return nil
+      # if type is an end date, then return a row number based on the ts (timestamp) order
+      def end_date_order(partition:, order: :ts, type: :type)
+        Sequel.case({1 => nil}, Sequel.function(:row_number).over(:partition => [partition, :type].flatten, :order => order), type)
+      end
+
+      def grpnm(partition:, order: :ts)
+        fn1 = Sequel.function(:row_number).over(:partition => partition, :order => order) - 1
         fn2 = Sequel.expr(fn1) / 2 + 1
         Sequel.function(:floor, fn2)
       end
