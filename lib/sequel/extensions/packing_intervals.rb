@@ -25,8 +25,8 @@ module Sequel
             with("#{cte_alias}1".to_sym, dataset.cross_apply(db["VALUES (1, #{start_date.to_s}), (-1, #{end_date.to_s})"].as(:a, [:type, :ts])).
                 select(*partition, :ts, :type).
                 select_append(
-                    Sequel.case({-1 => nil}, Sequel.function(:row_number).over(:partition => [partition, :type].flatten, :order => start_date), :type).as(:s),
-                    Sequel.case({1 => nil}, Sequel.function(:row_number).over(:partition => [partition, :type].flatten, :order => end_date), :type).as(:e))).
+                    Sequel.case({-1 => nil}, Sequel.function(:row_number).over(:partition => [partition, :type].flatten, :order => :ts), :type).as(:s),
+                    Sequel.case({1 => nil}, Sequel.function(:row_number).over(:partition => [partition, :type].flatten, :order => :ts), :type).as(:e))).
             with("#{cte_alias}2".to_sym, db["#{cte_alias}1".to_sym].select(*partition, :ts, :type, :s, :e).select_append { row_number.function.over(:partition => partition, :order => [:ts, type.desc]).as(:se) }).
             with("#{cte_alias}3".to_sym, db["#{cte_alias}2".to_sym].select_append(grpnm(partition: partition).as(:grpnm)).where(Sequel.lit('COALESCE(s - (se - s) - 1, (se - e) - e) = 0'))).
             with("#{cte_alias}4".to_sym, db["#{cte_alias}3".to_sym].select_group(*grpnm_partition).select_append { min(:ts).as(start_date) }.select_append { max(:ts).as(end_date) })
