@@ -4,7 +4,7 @@ module Sequel
   module Extensions
     module PackingIntervals
       def packing_intervals(partition: nil, dataset: self, start_date: :start_date, end_date: :end_date, cte_alias: :cte, order: nil)
-        order = order.nil? ? [:start_date, :end_date] : [start_date, end_date]
+        order = [start_date, end_date] if order.nil?
         unless dataset.where(Sequel.lit('? > ?', start_date, end_date)).limit(1).all.empty?
           raise PackingIntervals, 'ERROR: dataset contain at least one record with start date after end date'
         end
