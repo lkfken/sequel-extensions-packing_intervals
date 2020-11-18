@@ -13,15 +13,13 @@ module Sequel
           warn 'WARNING: dataset contain at least one record with start date = end date'
         end
 
-        partition ||= dataset.columns - [start_date, end_date]
+        partition       ||= dataset.columns - [start_date, end_date]
+        grpnm_partition = partition | [:grpnm]
 
         db = dataset.db
 
         missing_columns = partition - dataset.columns
         raise PackingIntervals::Error, "#{missing_columns} #{missing_columns.size == 1 ? 'is' : 'are'} not found in the dataset!" unless (missing_columns).empty?
-
-        grpnm_partition = partition | [:grpnm]
-        lag_end_date    = Sequel.function(:lag, end_date).over(:partition => partition, :order => [start_date, end_date])
 
         reduced = db["#{cte_alias}4".to_sym].
             # add time stamp (ts) and date type indicator (type, 1 = start date, -1 = end date)
@@ -44,13 +42,16 @@ module Sequel
                 select_group(*grpnm_partition).select_append { min(:ts).as(start_date) }.select_append { max(:ts).as(end_date) })
 
         # merge date intervals if no gap
-        db["#{cte_alias}7".to_sym].
-            with("#{cte_alias}5".to_sym, reduced.select_append(lag_end_date.as(:lag), Sequel.case({Sequel[start_date] <= Sequel.function(:dateadd, :day, 1, lag_end_date) => 0}, 1).as(:grp_start))).
-            with("#{cte_alias}6".to_sym, db["#{cte_alias}5".to_sym].select_append(Sequel.function(:sum, :grp_start).over(partition: partition, order: [start_date, end_date]).as(:grp))).
-            with("#{cte_alias}7".to_sym, db["#{cte_alias}6".to_sym].select_group(*(partition | [:grp])).select_append(
+        lag_fn = Sequel.function(:lag, end_date).over(:partition => partition, :order => [start_date, end_date])
+        db["#{cte_alias}8".to_sym].
+            with("#{cte_alias}5".to_sym, reduced.select_append(lag_fn.as(:lag))).
+            with("#{cte_alias}6".to_sym, db["#{cte_alias}5".to_sym].select_append(
+                Sequel.case({Sequel[start_date] <= Sequel.function(:dateadd, :day, 1, :lag) => 0}, 1).as(:grp_start))).
+            with("#{cte_alias}7".to_sym, db["#{cte_alias}6".to_sym].select_append(Sequel.function(:sum, :grp_start).over(partition: partition, order: [start_date, end_date]).as(:grp))).
+            with("#{cte_alias}8".to_sym, db["#{cte_alias}7".to_sym].select_group(*(partition | [:grp])).select_append(
                 Sequel.function(:min, start_date).as(start_date),
                 Sequel.function(:max, end_date).as(end_date))).
-            select(*partition, Sequel["#{cte_alias}7".to_sym][start_date], Sequel["#{cte_alias}7".to_sym][end_date])
+            select(*partition, Sequel["#{cte_alias}8".to_sym][start_date], Sequel["#{cte_alias}8".to_sym][end_date])
       end
 
       private
@@ -59,14 +60,14 @@ module Sequel
       # if type is an end date, then return nil
       # if type is a start date, then return a row number based on the ts (timestamp) order
       def start_date_order(partition:, order: :ts, type: :type)
-        Sequel.case({-1 => nil}, Sequel.function(:row_number).over(:partition => [partition, :type].flatten, :order => order), type)
+        Sequel.case({-1 => nil}, Sequel.function(:row_number).over(:partition => [partition, type].flatten, :order => order), type)
       end
 
       # @param type date type (1 = start date, -1 = end date)
       # if type is a start date, then return nil
       # if type is an end date, then return a row number based on the ts (timestamp) order
       def end_date_order(partition:, order: :ts, type: :type)
-        Sequel.case({1 => nil}, Sequel.function(:row_number).over(:partition => [partition, :type].flatten, :order => order), type)
+        Sequel.case({1 => nil}, Sequel.function(:row_number).over(:partition => [partition, type].flatten, :order => order), type)
       end
 
       def grpnm(partition:, order: :ts)
