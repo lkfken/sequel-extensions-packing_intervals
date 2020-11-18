@@ -6,9 +6,11 @@ module Sequel
   module Extensions
     module PackingIntervals
       def packing_intervals(partition: nil, dataset: self, start_date: :start_date, end_date: :end_date, cte_alias: :cte)
+
         unless dataset.where(Sequel.lit('? > ?', start_date, end_date)).limit(1).all.empty?
-          raise PackingIntervals, 'ERROR: dataset contain at least one record with start date after end date'
+          raise PackingIntervals::Error, 'ERROR: dataset contain at least one record with start date after end date'
         end
+
         unless dataset.where(Sequel.lit('? = ?', start_date, end_date)).limit(1).all.empty?
           warn 'WARNING: dataset contain at least one record with start date = end date'
         end
@@ -70,6 +72,7 @@ module Sequel
         Sequel.case({1 => nil}, Sequel.function(:row_number).over(:partition => [partition, type].flatten, :order => order), type)
       end
 
+      # created a grouping column as (ROW_NUMBER()+1)/2, which is a well-known trick for pairing consecutive rows
       def grpnm(partition:, order: :ts)
         fn1 = Sequel.function(:row_number).over(:partition => partition, :order => order) - 1
         fn2 = Sequel.expr(fn1) / 2 + 1
