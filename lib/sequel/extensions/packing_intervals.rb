@@ -28,7 +28,7 @@ module Sequel
             with("#{cte_alias}1".to_sym, dataset.cross_apply(db["VALUES (1, #{start_date.to_s}), (-1, #{end_date.to_s})"].as(:a, [:type, :ts])).
                 # select(*partition, :ts, :type).
                 # append the start date sequence number and end date sequence number
-                select_append(start_date_order(partition: partition).as(:s), end_date_order(partition: partition).as(:e))).
+                select_append(start_date_seqnm(partition: partition).as(:s), end_date_seqnm(partition: partition).as(:e))).
             with("#{cte_alias}2".to_sym, db["#{cte_alias}1".to_sym].
                 # select(*partition, :ts, :type, :s, :e).
                 # append the sequence number of partition
@@ -61,14 +61,14 @@ module Sequel
       # @param type date type (1 = start date, -1 = end date)
       # if type is an end date, then return nil
       # if type is a start date, then return a row number based on the ts (timestamp) order
-      def start_date_order(partition:, order: :ts, type: :type)
+      def start_date_seqnm(partition:, order: :ts, type: :type)
         Sequel.case({-1 => nil}, Sequel.function(:row_number).over(:partition => [partition, type].flatten, :order => order), type)
       end
 
       # @param type date type (1 = start date, -1 = end date)
       # if type is a start date, then return nil
       # if type is an end date, then return a row number based on the ts (timestamp) order
-      def end_date_order(partition:, order: :ts, type: :type)
+      def end_date_seqnm(partition:, order: :ts, type: :type)
         Sequel.case({1 => nil}, Sequel.function(:row_number).over(:partition => [partition, type].flatten, :order => order), type)
       end
 
