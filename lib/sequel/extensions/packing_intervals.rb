@@ -7,6 +7,12 @@ module Sequel
     module PackingIntervals
       def packing_intervals(partition: nil, dataset: self, start_date: :start_date, end_date: :end_date, cte_alias: :cte)
 
+        # start date and end date should be symbols. 
+        # It could not be if I could figure out how to set "partition" correctly below
+        # note: dataset.columns return an array of symbols
+        start_date = start_date.value.to_sym if start_date.respond_to?(:value)
+        end_date = end_date.value.to_sym if start_date.respond_to?(:value)
+
         unless dataset.where(Sequel.lit('? > ?', start_date, end_date)).limit(1).all.empty?
           raise PackingIntervals::Error, 'ERROR: dataset contain at least one record with start date after end date'
         end
@@ -25,7 +31,7 @@ module Sequel
 
         reduced = db["#{cte_alias}4".to_sym].
             # add time stamp (ts) and date type indicator (type, 1 = start date, -1 = end date)
-            with("#{cte_alias}1".to_sym, dataset.cross_apply(db["VALUES (1, #{start_date}), (-1, #{end_date})"].as(:a, [:type, :ts])).
+            with("#{cte_alias}1".to_sym, dataset.cross_apply(Sequel.lit("(VALUES (1, ?), (-1, ?))",start_date,end_date).as(:a, [:type, :ts])).
                 # select(*partition, :ts, :type).
                 # append the start date sequence number and end date sequence number
                 select_append(start_date_seqnm(partition: partition).as(:s), end_date_seqnm(partition: partition).as(:e))).
