@@ -25,7 +25,7 @@ module Sequel
 
         reduced = db["#{cte_alias}4".to_sym].
             # add time stamp (ts) and date type indicator (type, 1 = start date, -1 = end date)
-            with("#{cte_alias}1".to_sym, dataset.cross_apply(db["VALUES (1, #{start_date.to_s}), (-1, #{end_date.to_s})"].as(:a, [:type, :ts])).
+            with("#{cte_alias}1".to_sym, dataset.cross_apply(db["VALUES (1, #{start_date}), (-1, #{end_date})"].as(:a, [:type, :ts])).
                 # select(*partition, :ts, :type).
                 # append the start date sequence number and end date sequence number
                 select_append(start_date_seqnm(partition: partition).as(:s), end_date_seqnm(partition: partition).as(:e))).
@@ -48,7 +48,7 @@ module Sequel
         db["#{cte_alias}8".to_sym].
             with("#{cte_alias}5".to_sym, reduced.select_append(lag_fn.as(:lag))).
             with("#{cte_alias}6".to_sym, db["#{cte_alias}5".to_sym].select_append(
-                Sequel.case({start_date <= Sequel.function(:dateadd, :day, 1, :lag) => 0}, 1).as(:grp_start))).
+                Sequel.case({Sequel[start_date] <= Sequel.function(:dateadd, :day, 1, :lag) => 0}, 1).as(:grp_start))).
             with("#{cte_alias}7".to_sym, db["#{cte_alias}6".to_sym].select_append(Sequel.function(:sum, :grp_start).over(partition: partition, order: [start_date, end_date]).as(:grp))).
             with("#{cte_alias}8".to_sym, db["#{cte_alias}7".to_sym].select_group(*(partition | [:grp])).select_append(
                 Sequel.function(:min, start_date).as(start_date),
