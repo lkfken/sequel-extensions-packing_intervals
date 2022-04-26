@@ -48,7 +48,7 @@ module Sequel
         db["#{cte_alias}8".to_sym].
             with("#{cte_alias}5".to_sym, reduced.select_append(lag_fn.as(:lag))).
             with("#{cte_alias}6".to_sym, db["#{cte_alias}5".to_sym].select_append(
-                Sequel.case({Sequel[start_date] <= Sequel.function(:dateadd, :day, 1, :lag) => 0}, 1).as(:grp_start))).
+                Sequel.case({start_date <= Sequel.function(:dateadd, :day, 1, :lag) => 0}, 1).as(:grp_start))).
             with("#{cte_alias}7".to_sym, db["#{cte_alias}6".to_sym].select_append(Sequel.function(:sum, :grp_start).over(partition: partition, order: [start_date, end_date]).as(:grp))).
             with("#{cte_alias}8".to_sym, db["#{cte_alias}7".to_sym].select_group(*(partition | [:grp])).select_append(
                 Sequel.function(:min, start_date).as(start_date),
