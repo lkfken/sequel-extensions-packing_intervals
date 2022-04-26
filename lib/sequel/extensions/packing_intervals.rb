@@ -7,6 +7,7 @@ module Sequel
     module PackingIntervals
       def packing_intervals(partition: nil, dataset: self, start_date: :start_date, end_date: :end_date, cte_alias: :cte)
 
+        # change to a symbol if start/end date is an Sequel::SQL::Identifier
         # start date and end date should be symbols. 
         # It could not be if I could figure out how to set "partition" correctly below
         # note: dataset.columns return an array of symbols
