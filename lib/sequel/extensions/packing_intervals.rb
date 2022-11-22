@@ -5,7 +5,7 @@ require_relative 'packing_intervals/version'
 module Sequel
   module Extensions
     module PackingIntervals
-      def packing_intervals(partition: nil, dataset: self, start_date: :start_date, end_date: :end_date, cte_alias: :cte)
+      def packing_intervals(partition: nil, dataset: self, start_date: :start_date, end_date: :end_date, cte_alias: :cte, **other_params)
 
         # change to a symbol if start/end date is an Sequel::SQL::Identifier
         # start date and end date should be symbols. 
