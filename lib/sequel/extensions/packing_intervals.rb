@@ -12,7 +12,7 @@ module Sequel
         # It could not be if I could figure out how to set "partition" correctly below
         # note: dataset.columns return an array of symbols
         start_date = start_date.value.to_sym if start_date.respond_to?(:value)
-        end_date = end_date.value.to_sym if start_date.respond_to?(:value)
+        end_date = end_date.value.to_sym if end_date.respond_to?(:value)
 
         unless dataset.where(Sequel.lit('? > ?', start_date, end_date)).limit(1).all.empty?
           raise PackingIntervals::Error, 'ERROR: dataset contain at least one record with start date after end date'
